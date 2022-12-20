@@ -2,6 +2,7 @@
 
 using Demo_Console.DIspose;
 using Demo_Console.ElasticSearch;
+using Demo_Console.Playground;
 
 Console.WriteLine("Hello, World!");
 
