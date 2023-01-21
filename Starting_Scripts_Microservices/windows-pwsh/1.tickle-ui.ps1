@@ -1,0 +1,2 @@
+wt -w 0 --title '1-tickle-ui' --tabColor '#A6e230' -d 'D:\Sympli\Source\Frontend\tickle-ui' `
+pwsh -noexit -c 'Set-ExecutionPolicy -ExecutionPolicy Unrestricted -Scope Process && Get-ExecutionPolicy && yarn start'
