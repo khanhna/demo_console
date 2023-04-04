@@ -1,4 +1,4 @@
-﻿namespace Demo_Console.DIspose;
+﻿namespace Demo_Console.Dispose;
 
 public static class DisposeTest
 {

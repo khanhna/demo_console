@@ -1,7 +1,8 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-using Demo_Console.DIspose;
+using Demo_Console.Dispose;
 using Demo_Console.ElasticSearch;
+using Demo_Console.Mapperly;
 using Demo_Console.Playground;
 
 Console.WriteLine("Hello, World!");
@@ -11,3 +12,6 @@ Console.WriteLine("Hello, World!");
 // await workspaceService.ExecutePath();
 
 DisposeTest.ReadLine();
+
+// var test = MapperlyTest.MappingFromSource();
+// Console.ReadLine();

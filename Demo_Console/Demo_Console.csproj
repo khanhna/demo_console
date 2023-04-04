@@ -5,11 +5,13 @@
         <TargetFramework>net6.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="NEST" Version="7.17.5" />
       <PackageReference Include="NEST.JsonNetSerializer" Version="7.17.5" />
+      <PackageReference Include="Riok.Mapperly" Version="2.7.0" />
       <PackageReference Include="SHA3.Net" Version="2.0.0" />
     </ItemGroup>
 
