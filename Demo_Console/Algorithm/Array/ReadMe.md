@@ -1,0 +1,1 @@
+[Basic understanding](https://www.codeintuition.io/courses/array/IRNDjebVESrAkYFWjxUL1)
