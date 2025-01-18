@@ -146,4 +146,39 @@ public class TreeAndGraph
 
         return result;
     }
+
+    // https://leetcode.com/problems/find-if-path-exists-in-graph
+    public bool ValidPath(int n, int[][] edges, int source, int destination)
+    {
+        if (source == destination) return true;
+        if (edges.Length == 0) return false;
+        
+        var graph = new Dictionary<int, List<int>>();
+        
+        foreach (var edge in edges)
+        {
+            if (!graph.ContainsKey(edge[0])) graph[edge[0]] = new List<int>();
+            if (!graph.ContainsKey(edge[1])) graph[edge[1]] = new List<int>();
+            
+            graph[edge[0]].Add(edge[1]);
+            graph[edge[1]].Add(edge[0]);
+        }
+        
+        var visited = new HashSet<int>();
+        var traversalStack = new Stack<int>(n);
+        traversalStack.Push(source);
+
+        while (traversalStack.Count > 0)
+        {
+            var node = traversalStack.Pop();
+            if(node == destination) return true;
+            
+            foreach (var neighbor in graph[node])
+            {
+                if (visited.Add(neighbor)) traversalStack.Push(neighbor);
+            }
+        }
+
+        return false;
+    }
 }
