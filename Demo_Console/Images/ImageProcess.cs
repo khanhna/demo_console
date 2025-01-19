@@ -1,6 +1,6 @@
 using System.Drawing;
-using System.Drawing.Imaging;
 using OpenCvSharp;
+using Xabe.FFmpeg;
 using Size = System.Drawing.Size;
 
 namespace Demo_Console.Images;
@@ -221,7 +221,7 @@ public class ImageProcess
 
 public class ImageProcessTestOpenCvSharp
 {
-    public static void MergeToFinalFrameOpenCv()
+    public static async Task MergeToFinalFrameOpenCv()
     {
         var videoPath = "camera-view-image_001.mp4"; // Path to the video file
         var outputFolder = "openCvFrames"; // Folder to save frames
@@ -312,6 +312,57 @@ public class ImageProcessTestOpenCvSharp
             {
                 channel.Dispose();
             }
+        }
+        
+        // Set FFmpeg executables path (if needed, optional for auto-download)
+        FFmpeg.SetExecutablesPath("C:\\ffmpeg");
+        
+        // Custom FFmpeg command-line input as a string
+        var inputPath = $"{Path.Combine(targetDirectory, outputFolder, "final_frames_%04d.png")}";
+        var outputPathNativeVideo = $"{Path.Combine(targetDirectory, outputFolder, "output_hwaccel_auto_30fps.mp4")}";
+        var outputPathOptimizedVideo = $"{Path.Combine(targetDirectory, outputFolder, "output_hwaccel_auto_60fps.mp4")}";
+        
+        if(File.Exists(outputPathNativeVideo)) File.Delete(outputPathNativeVideo);
+        if(File.Exists(outputPathOptimizedVideo)) File.Delete(outputPathOptimizedVideo);
+
+        // Execute the custom FFmpeg command
+        try
+        {
+            var customArgs =
+                $"-hwaccel auto -r 30 -i \"{inputPath}\" -r 30 -filter:v scale=720:-1 -c:v ffv1 -pix_fmt yuv420p -colorspace bt709 \"{outputPathNativeVideo}\"";
+
+            // Start the conversion
+            var result = await FFmpeg.Conversions.New().AddParameter(customArgs).Start();
+            Console.WriteLine($"Conversion native completed successfully! - {result.Duration:hh\\:mm\\:ss}");
+            
+            customArgs =
+                $"-hwaccel auto -i \"{outputPathNativeVideo}\" -vf \"minterpolate=fps=60\" -c:v libvpx-vp9 -crf 18 \"{outputPathOptimizedVideo}\"";
+            
+            // Start the conversion
+            var conversion = FFmpeg.Conversions.New().AddParameter(customArgs);
+            
+            // Subscribe to output data received event
+            conversion.OnDataReceived += (sender, data) =>
+            {
+                if (!string.IsNullOrEmpty(data.Data))
+                {
+                    Console.WriteLine($"FFmpeg Output: {data.Data}");
+                }
+            };
+
+            // Subscribe to progress updates (optional)
+            conversion.OnProgress += (sender, progress) =>
+            {
+                Console.WriteLine($"Progress: {progress.Percent}%");
+            };
+
+            result = await conversion.Start();
+
+            Console.WriteLine($"Conversion optimized completed successfully! - {result.Duration:hh\\:mm\\:ss}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
         }
     }
     
