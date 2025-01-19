@@ -303,7 +303,7 @@ public class ImageProcessTestOpenCvSharp
             Cv2.Merge(channels, blendedImage);
             
             // Save or display the result
-            Cv2.ImWrite(Path.Combine(targetDirectory, "openCvProcessed", $"final_frames_{frameIndex:D4}.png"), blendedImage);
+            Cv2.ImWrite(Path.Combine(targetDirectory, outputFolder, $"final_frames_{frameIndex:D4}.png"), blendedImage);
             
             Console.WriteLine($"Saved frame {frameIndex}");
             frameIndex++;
