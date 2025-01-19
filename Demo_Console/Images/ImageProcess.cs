@@ -576,6 +576,39 @@ public class ImageProcessTestOpenCvSharp
         // Save or display the cropped image
         Cv2.ImWrite(Path.Combine(targetDirectory, "openCvProcessed", "cropped_Image.png"), croppedImage);
     }
+    
+    /// <param name="brightness">This act as stepping, for our use case, start from 3 and try</param>
+    /// <param name="contrast">This act as multiplier, for our use case, start from 1.05 and try</param>
+    public static void AdjustBrightnessAndContrast(double brightness, double contrast)
+    {
+        var targetDirectory = Directory.GetCurrentDirectory();
+        var inputPath = Path.Combine(targetDirectory, "camera-view-image.png"); // Replace with your image path
+        var outputPath = "adjust_brightness_contrast_image.png";
+        // Load the image
+        var image = Cv2.ImRead(inputPath);
+        
+        // Adjust brightness and contrast
+        using var outputImage = new Mat();
+        image.ConvertTo(outputImage, MatType.CV_8UC3, contrast, brightness);
+        
+        Cv2.ImWrite(Path.Combine(targetDirectory, outputPath), outputImage);
+    }
+
+    public static void DenoiseImage()
+    {
+        var targetDirectory = Directory.GetCurrentDirectory();
+        var inputPath = Path.Combine(targetDirectory, "camera-view-image.png"); // Replace with your image path
+        var outputPath = "denoise_image.png";
+        // Load the image
+        var image = Cv2.ImRead(inputPath);
+        
+        using var result = new Mat();
+        
+        // Cv2.FastNlMeansDenoisingColored(image, result, 6, 6);
+        Cv2.BilateralFilter(image, result, 9, 75, 75);
+        
+        Cv2.ImWrite(Path.Combine(targetDirectory, outputPath), result);
+    }
 }
 
 public class ImageProcessTestNatively
