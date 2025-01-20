@@ -221,7 +221,7 @@ public class ImageProcess
 
 public class ImageProcessTestOpenCvSharp
 {
-    public static async Task MergeToFinalFrameOpenCv()
+    public static async Task MergeToFinalFrameOpenCv(ICollection<TimeSpan> shootTimes)
     {
         var videoPath = "camera-view-image_001.mp4"; // Path to the video file
         var outputFolder = "openCvFrames"; // Folder to save frames
@@ -235,7 +235,7 @@ public class ImageProcessTestOpenCvSharp
         
         // Define the frame size
         // In order for finalImage.CopyTo(roi); to work, Cv2.ImRead flag must not be ImreadModes.Unchanged!!!
-        // MatType.CV_8UC3 is the MatType when read PNG Image with ImreadModes.Color flag!!
+        // MatType.CV_8UC3(standard 3 channel RGB) is the MatType when read PNG Image with ImreadModes.Color flag!!
         using var imageTheme = Cv2.ImRead(Path.Combine(targetDirectory, "133548626886541756_264A.png"),
             ImreadModes.Unchanged);
         using var baseImage = new Mat(new OpenCvSharp.Size(imageTheme.Width, imageTheme.Height), MatType.CV_8UC3);
@@ -246,38 +246,71 @@ public class ImageProcessTestOpenCvSharp
             Console.WriteLine("Failed to open video.");
             return;
         }
-
+        
+        var isHighFramerate = capture.Fps > 50;
+        var captureRange = ExtractFrameIndices(shootTimes, Convert.ToInt32(capture.Fps));
+        var frameToExtract = captureRange[0][1] - captureRange[0][0];
+        var framesToFill = new Mat?[4];
+        var framesToExtractEachIterationFirstVideo = Math.Min(captureRange.Length, framesToFill.Length);
+        
         var frameIndex = 1;
-        using var frame = new Mat();
+        var jpegFormatCompressionParams = new ImageEncodingParam(ImwriteFlags.JpegQuality, 100);
 
-        while (capture.Read(frame))
+        for (var i = 0; i < frameToExtract; i++)
         {
-            if (frame.Empty())
+            // For high framerate video, skip every other frame, target ~30-40fps only
+            if (isHighFramerate && i % 2 == 0) continue;
+            // Set the video capture to the desired frame position
+            for (var j = 0; j < framesToExtractEachIterationFirstVideo; j++)
             {
-                break;
+                capture.Set(VideoCaptureProperties.PosFrames, captureRange[j][0] + i);
+                
+                using var frame = new Mat();
+                // Read the frame at the specified position
+                if (capture.Read(frame) && !frame.Empty())
+                {
+                    framesToFill[j] = frame.Clone().CropImageCenter(3, 2).ResizeImage(916).FlipImage(FlipMode.Y);
+                }
             }
             
-            using var croppedImage = CropImageCenter(frame, 3, 2);
-            using var resizedImage = ResizeImage(croppedImage, 916);
-            using var finalImage = FlipImage(resizedImage);
-            
             // Define the ROI on the base image
-            var roiRect = new Rect(58, 58, finalImage.Width, finalImage.Height);
-            var roi = new Mat(baseImage, roiRect);
-            finalImage.CopyTo(roi);
+            Mat roi;
+            if (framesToFill[0] != null)
+            {
+                var roiRect = new Rect(58, 58, framesToFill[0]!.Width, framesToFill[0]!.Height);
+                roi = new Mat(baseImage, roiRect);
+                framesToFill[0]!.CopyTo(roi);
+                roi.Dispose();
+            }
             
-            roiRect = new Rect(58, 718, finalImage.Width, finalImage.Height);
-            roi = new Mat(baseImage, roiRect);
-            finalImage.CopyTo(roi);
+            if (framesToFill[1] != null)
+            {
+                var roiRect = new Rect(58, 718, framesToFill[1]!.Width, framesToFill[1]!.Height);
+                roi = new Mat(baseImage, roiRect);
+                framesToFill[1]!.CopyTo(roi);
+                roi.Dispose();
+            }
             
-            roiRect = new Rect(58, 1378, finalImage.Width, finalImage.Height);
-            roi = new Mat(baseImage, roiRect);
-            finalImage.CopyTo(roi);
+            if (framesToFill[2] != null)
+            {
+                var roiRect = new Rect(58, 1378, framesToFill[2]!.Width, framesToFill[2]!.Height);
+                roi = new Mat(baseImage, roiRect);
+                framesToFill[2]!.CopyTo(roi);
+                roi.Dispose();
+            }
             
-            roiRect = new Rect(58, 2038, finalImage.Width, finalImage.Height);
-            roi = new Mat(baseImage, roiRect);
-            finalImage.CopyTo(roi);
-            roi.Dispose();
+            if (framesToFill[3] != null)
+            {
+                var roiRect = new Rect(58, 2038, framesToFill[3]!.Width, framesToFill[3]!.Height);
+                roi = new Mat(baseImage, roiRect);
+                framesToFill[3]!.CopyTo(roi);
+                roi.Dispose();
+            }
+
+            foreach (var item in framesToFill)
+            {
+                item?.Dispose();
+            }
 
             // Add an alpha channel to the overlay image
             using var alphaChannel = new Mat(); // Alpha mask
@@ -303,7 +336,7 @@ public class ImageProcessTestOpenCvSharp
             Cv2.Merge(channels, blendedImage);
             
             // Save or display the result
-            Cv2.ImWrite(Path.Combine(targetDirectory, outputFolder, $"final_frames_{frameIndex:D4}.png"), blendedImage);
+            Cv2.ImWrite(Path.Combine(targetDirectory, outputFolder, $"final_frames_{frameIndex:D4}.jpg"), blendedImage, jpegFormatCompressionParams);
             
             Console.WriteLine($"Saved frame {frameIndex}");
             frameIndex++;
@@ -312,15 +345,29 @@ public class ImageProcessTestOpenCvSharp
             {
                 channel.Dispose();
             }
+
+            if (frameIndex % 100 == 0)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+            }
         }
+        
+        // Force GC after processing Image
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        
+        // Check if image files exist
+        if (Directory.GetFiles(Path.Combine(targetDirectory, outputFolder), "*", SearchOption.TopDirectoryOnly).Length <
+            30) return;
         
         // Set FFmpeg executables path (if needed, optional for auto-download)
         FFmpeg.SetExecutablesPath("C:\\ffmpeg");
         
         // Custom FFmpeg command-line input as a string
-        var inputPath = $"{Path.Combine(targetDirectory, outputFolder, "final_frames_%04d.png")}";
+        var inputPath = $"{Path.Combine(targetDirectory, outputFolder, "final_frames_%04d.jpg")}";
         var outputPathNativeVideo = $"{Path.Combine(targetDirectory, outputFolder, "output_hwaccel_auto_30fps.mp4")}";
-        var outputPathOptimizedVideo = $"{Path.Combine(targetDirectory, outputFolder, "output_hwaccel_auto_60fps.mp4")}";
+        var outputPathOptimizedVideo = $"{Path.Combine(targetDirectory, outputFolder, "output_hwaccel_auto_60fps.webm")}";
         
         if(File.Exists(outputPathNativeVideo)) File.Delete(outputPathNativeVideo);
         if(File.Exists(outputPathOptimizedVideo)) File.Delete(outputPathOptimizedVideo);
@@ -329,33 +376,21 @@ public class ImageProcessTestOpenCvSharp
         try
         {
             var customArgs =
-                $"-hwaccel auto -r 30 -i \"{inputPath}\" -r 30 -filter:v scale=720:-1 -c:v ffv1 -pix_fmt yuv420p -colorspace bt709 \"{outputPathNativeVideo}\"";
+                $"-hwaccel auto -r {(isHighFramerate ? Convert.ToInt32(capture.Fps / 2) : capture.Fps)} -i \"{inputPath}\" -r {(isHighFramerate ? Convert.ToInt32(capture.Fps / 2) : capture.Fps)} -filter:v scale=720:-1 -c:v ffv1 -pix_fmt yuv420p -colorspace bt709 \"{outputPathNativeVideo}\"";
 
-            // Start the conversion
-            var result = await FFmpeg.Conversions.New().AddParameter(customArgs).Start();
-            Console.WriteLine($"Conversion native completed successfully! - {result.Duration:hh\\:mm\\:ss}");
-            
-            customArgs =
-                $"-hwaccel auto -i \"{outputPathNativeVideo}\" -vf \"minterpolate=fps=60\" -c:v libvpx-vp9 -crf 18 \"{outputPathOptimizedVideo}\"";
-            
             // Start the conversion
             var conversion = FFmpeg.Conversions.New().AddParameter(customArgs);
+            AddConversionOutputInfo(conversion);
+            var result = await conversion.Start();
             
-            // Subscribe to output data received event
-            conversion.OnDataReceived += (sender, data) =>
-            {
-                if (!string.IsNullOrEmpty(data.Data))
-                {
-                    Console.WriteLine($"FFmpeg Output: {data.Data}");
-                }
-            };
+            Console.WriteLine($"Conversion native completed successfully! - {result.Duration:hh\\:mm\\:ss}");
 
-            // Subscribe to progress updates (optional)
-            conversion.OnProgress += (sender, progress) =>
-            {
-                Console.WriteLine($"Progress: {progress.Percent}%");
-            };
-
+            customArgs =
+                $"-hwaccel auto -i \"{outputPathNativeVideo}\" -vf \"minterpolate=fps=60\" -c:v libvpx-vp9 -crf 20 \"{outputPathOptimizedVideo}\"";
+            
+            // Start the conversion
+            conversion = FFmpeg.Conversions.New().AddParameter(customArgs);
+            AddConversionOutputInfo(conversion);
             result = await conversion.Start();
 
             Console.WriteLine($"Conversion optimized completed successfully! - {result.Duration:hh\\:mm\\:ss}");
@@ -364,6 +399,56 @@ public class ImageProcessTestOpenCvSharp
         {
             Console.WriteLine($"Error: {ex.Message}");
         }
+    }
+    
+    private static int[][] ExtractFrameIndices(ICollection<TimeSpan> shootTime, int recordFps)
+    {
+        if(shootTime.Count == 0) return [];
+        
+        var result = new int[shootTime.Count][];
+        var step = 1000.0 / recordFps;
+        var maxDurationByFrames = 10 * recordFps; 
+        var currentIdx = 0;
+        
+        foreach (var targetTime in shootTime)
+        {
+            var targetFrame = targetTime.TotalMilliseconds/step;
+            var startFrame = Math.Max(1, targetFrame - maxDurationByFrames);
+
+            result[currentIdx] = [Convert.ToInt32(startFrame), Convert.ToInt32(targetFrame)];
+            currentIdx++;
+        }
+
+        var shortestFrameCount = result.MinBy(x => x[1] - x[0])!;
+        var minimumFrameDuration = shortestFrameCount[1] - shortestFrameCount[0];
+
+        foreach (var range in result)
+        {
+            if (range[1] - range[0] < minimumFrameDuration) continue;
+            range[0] = range[1] - minimumFrameDuration;
+        }
+
+        return result;
+    }
+
+    private static void AddConversionOutputInfo(IConversion? conversion)
+    {
+        if(conversion == null) return;
+        
+        // Subscribe to output data received event
+        conversion.OnDataReceived += (sender, data) =>
+        {
+            if (!string.IsNullOrEmpty(data.Data))
+            {
+                Console.WriteLine($"FFmpeg Output: {data.Data}");
+            }
+        };
+
+        // Subscribe to progress updates (optional)
+        conversion.OnProgress += (sender, progress) =>
+        {
+            Console.WriteLine($"Progress: {progress.Percent}%");
+        };
     }
     
     public static void MergeToFinalFrameGraphic()
@@ -598,16 +683,76 @@ public class ImageProcessTestOpenCvSharp
     {
         var targetDirectory = Directory.GetCurrentDirectory();
         var inputPath = Path.Combine(targetDirectory, "camera-view-image.png"); // Replace with your image path
-        var outputPath = "denoise_image.png";
+        var outputPath = "denoise_image.jpg";
         // Load the image
-        var image = Cv2.ImRead(inputPath);
+        using var image = Cv2.ImRead(inputPath);
         
         using var result = new Mat();
         
         // Cv2.FastNlMeansDenoisingColored(image, result, 6, 6);
         Cv2.BilateralFilter(image, result, 9, 75, 75);
+
+        Cv2.ImWrite(Path.Combine(targetDirectory, outputPath), result, new ImageEncodingParam(ImwriteFlags.JpegQuality, 100));
+    }
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="targetRate">Normally, value between 1.005 - 1.1</param>
+    public static void AdjustImageSaturation(double targetRate)
+    {
+        var targetDirectory = Directory.GetCurrentDirectory();
+        var inputPath = Path.Combine(targetDirectory, "camera-view-image.png"); // Replace with your image path
+        var outputPath = "saturation_adjusted_image.png";
+        // Load the image
+        using var image = Cv2.ImRead(inputPath);
         
-        Cv2.ImWrite(Path.Combine(targetDirectory, outputPath), result);
+        // Convert to HSV color space
+        using var hsvImage = new Mat();
+        Cv2.CvtColor(image, hsvImage, ColorConversionCodes.BGR2HSV);
+        
+        // Split into H, S, and V channels
+        var hsvChannels = Cv2.Split(hsvImage);
+        var hue = hsvChannels[0];
+        var saturation = hsvChannels[1];
+        var value = hsvChannels[2];
+        
+        // Apply vibrance adjustment on the saturation channel
+        using var adjustedSaturation = AdjustVibrance(saturation, targetRate); // Increase vibrance by a factor of 1.2
+
+        // Merge back the channels
+        using var adjustedHSV = new Mat();
+        Cv2.Merge([hue, adjustedSaturation, value], adjustedHSV);
+
+        // Convert back to BGR color space
+        using var adjustedImage = new Mat();
+        Cv2.CvtColor(adjustedHSV, adjustedImage, ColorConversionCodes.HSV2BGR);
+        
+        Cv2.ImWrite(Path.Combine(targetDirectory, outputPath), adjustedImage);
+
+        foreach (var channel in hsvChannels)
+        {
+            channel.Dispose();
+        }
+    }
+    
+    private static Mat AdjustVibrance(Mat saturation, double factor)
+    {
+        // Clone the saturation channel to modify it
+        var adjusted = saturation.Clone();
+
+        // Iterate through each pixel to adjust vibrance
+        for (var y = 0; y < adjusted.Rows; y++)
+        {
+            for (var x = 0; x < adjusted.Cols; x++)
+            {
+                var satValue = adjusted.At<byte>(y, x);
+                var adjustedValue = satValue * (1 + factor * (1 - (satValue / 255.0)));
+                adjusted.At<byte>(y, x) = (byte)Math.Min(Math.Max(adjustedValue, 0), 255);
+            }
+        }
+
+        return adjusted;
     }
 }
 
