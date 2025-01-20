@@ -221,9 +221,14 @@ public class ImageProcess
 
 public class ImageProcessTestOpenCvSharp
 {
-    public static async Task MergeToFinalFrameOpenCv(ICollection<TimeSpan> shootTimes)
+    private static readonly TimeSpan StandardRecordDuration = new(0, 0, 0, 10);
+    
+    /// <summary>
+    /// <b>Only work with 60 fps and 30 fps input video</b>
+    /// </summary>
+    /// <param name="shootingDetailInfos"></param>
+    public static async Task MergeToFinalFrameOpenCv(IList<ShootLayoutDetail> shootingDetailInfos)
     {
-        var videoPath = "camera-view-image_001.mp4"; // Path to the video file
         var outputFolder = "openCvFrames"; // Folder to save frames
         var targetDirectory = Directory.GetCurrentDirectory();
         
@@ -238,78 +243,81 @@ public class ImageProcessTestOpenCvSharp
         // MatType.CV_8UC3(standard 3 channel RGB) is the MatType when read PNG Image with ImreadModes.Color flag!!
         using var imageTheme = Cv2.ImRead(Path.Combine(targetDirectory, "133548626886541756_264A.png"),
             ImreadModes.Unchanged);
-        using var baseImage = new Mat(new OpenCvSharp.Size(imageTheme.Width, imageTheme.Height), MatType.CV_8UC3);
+        using var rootImage = Cv2.ImRead(Path.Combine(targetDirectory, "133548626886541756_264A.png"));
 
-        using var capture = new VideoCapture(videoPath);
-        if (!capture.IsOpened())
+        var videos = new Dictionary<string, VideoCapture>(2);
+
+        foreach (var item in shootingDetailInfos.Where(x => !string.IsNullOrEmpty(x.VideoName))
+                     .DistinctBy(x => x.VideoName))
         {
-            Console.WriteLine("Failed to open video.");
-            return;
+            var capture = new VideoCapture(item.VideoName);
+            if (!capture.IsOpened())
+            {
+                Console.WriteLine("Failed to open video.");
+                foreach (var video in videos)
+                {
+                    video.Value.Dispose();
+                }
+                return;
+            }
+
+            videos[item.VideoName] = capture;
         }
         
-        var isHighFramerate = capture.Fps > 50;
-        var captureRange = ExtractFrameIndices(shootTimes, Convert.ToInt32(capture.Fps));
-        var frameToExtract = captureRange[0][1] - captureRange[0][0];
-        var framesToFill = new Mat?[4];
-        var framesToExtractEachIterationFirstVideo = Math.Min(captureRange.Length, framesToFill.Length);
+        if(videos.Count == 0) return;
+        var captureRanges = ExtractFrameIndices(shootingDetailInfos, videos);
         
         var frameIndex = 1;
+        var isReachedEnd = false;
         var jpegFormatCompressionParams = new ImageEncodingParam(ImwriteFlags.JpegQuality, 100);
 
-        for (var i = 0; i < frameToExtract; i++)
+        // We target to generate 30fps video
+        for (var i = 0; i < 300; i++)
         {
-            // For high framerate video, skip every other frame, target ~30-40fps only
-            if (isHighFramerate && i % 2 == 0) continue;
-            // Set the video capture to the desired frame position
-            for (var j = 0; j < framesToExtractEachIterationFirstVideo; j++)
+            if(isReachedEnd) break;
+            using var baseImage = rootImage.Clone();
+            
+            foreach (var capture in captureRanges)
             {
-                capture.Set(VideoCaptureProperties.PosFrames, captureRange[j][0] + i);
+                if (string.IsNullOrEmpty(capture.VideoName))
+                {// Fill white
+                    var height = capture.Width * capture.HeighRatio / capture.WidthRatio;
+                    using var whitePlaceholder = new Mat(new OpenCvSharp.Size(capture.Width, height), MatType.CV_8UC3);
+                    whitePlaceholder.SetTo(new Scalar(255, 255, 255));
+                    var roiRect = new Rect(capture.AxisX, capture.AxisY, capture.Width, height);
+                    // Define the ROI on the base image
+                    using var roi = new Mat(baseImage, roiRect);
+                    whitePlaceholder.CopyTo(roi);
+                    continue;
+                }
                 
+                var video = videos[capture.VideoName];
+                var frameToTake = capture.FrameStart + (video.Fps > 30 ? i * 2 : i);
+                if (frameToTake > capture.FrameEnd) isReachedEnd = true;
+
+                video.Set(VideoCaptureProperties.PosFrames, frameToTake);
+                    
                 using var frame = new Mat();
                 // Read the frame at the specified position
-                if (capture.Read(frame) && !frame.Empty())
+                if (video.Read(frame) && !frame.Empty())
                 {
-                    framesToFill[j] = frame.Clone().CropImageCenter(3, 2).ResizeImage(916).FlipImage(FlipMode.Y);
+                    using var processedFrame = frame.Clone().CropImageCenter(capture.WidthRatio, capture.HeighRatio)
+                        .ResizeImage(capture.Width).FlipImage(FlipMode.Y);
+                    var roiRect = new Rect(capture.AxisX, capture.AxisY, processedFrame.Width, processedFrame.Height);
+                    // Define the ROI on the base image
+                    using var roi = new Mat(baseImage, roiRect);
+                    processedFrame.CopyTo(roi);
                 }
-            }
-            
-            // Define the ROI on the base image
-            Mat roi;
-            if (framesToFill[0] != null)
-            {
-                var roiRect = new Rect(58, 58, framesToFill[0]!.Width, framesToFill[0]!.Height);
-                roi = new Mat(baseImage, roiRect);
-                framesToFill[0]!.CopyTo(roi);
-                roi.Dispose();
-            }
-            
-            if (framesToFill[1] != null)
-            {
-                var roiRect = new Rect(58, 718, framesToFill[1]!.Width, framesToFill[1]!.Height);
-                roi = new Mat(baseImage, roiRect);
-                framesToFill[1]!.CopyTo(roi);
-                roi.Dispose();
-            }
-            
-            if (framesToFill[2] != null)
-            {
-                var roiRect = new Rect(58, 1378, framesToFill[2]!.Width, framesToFill[2]!.Height);
-                roi = new Mat(baseImage, roiRect);
-                framesToFill[2]!.CopyTo(roi);
-                roi.Dispose();
-            }
-            
-            if (framesToFill[3] != null)
-            {
-                var roiRect = new Rect(58, 2038, framesToFill[3]!.Width, framesToFill[3]!.Height);
-                roi = new Mat(baseImage, roiRect);
-                framesToFill[3]!.CopyTo(roi);
-                roi.Dispose();
-            }
-
-            foreach (var item in framesToFill)
-            {
-                item?.Dispose();
+                else
+                {// Fill white
+                    var height = capture.Width * capture.HeighRatio / capture.WidthRatio;
+                    using var whitePlaceholder = new Mat(new OpenCvSharp.Size(capture.Width, height), MatType.CV_8UC3);
+                    whitePlaceholder.SetTo(new Scalar(255, 255, 255));
+                    var roiRect = new Rect(capture.AxisX, capture.AxisY, capture.Width, height);
+                    // Define the ROI on the base image
+                    using var roi = new Mat(baseImage, roiRect);
+                    whitePlaceholder.CopyTo(roi);
+                }
             }
 
             // Add an alpha channel to the overlay image
@@ -352,6 +360,11 @@ public class ImageProcessTestOpenCvSharp
                 GC.WaitForPendingFinalizers();
             }
         }
+
+        foreach (var video in videos)
+        {
+            video.Value.Dispose();
+        }
         
         // Force GC after processing Image
         GC.Collect();
@@ -376,7 +389,7 @@ public class ImageProcessTestOpenCvSharp
         try
         {
             var customArgs =
-                $"-hwaccel auto -r {(isHighFramerate ? Convert.ToInt32(capture.Fps / 2) : capture.Fps)} -i \"{inputPath}\" -r {(isHighFramerate ? Convert.ToInt32(capture.Fps / 2) : capture.Fps)} -filter:v scale=720:-1 -c:v ffv1 -pix_fmt yuv420p -colorspace bt709 \"{outputPathNativeVideo}\"";
+                $"-hwaccel auto -r 30 -i \"{inputPath}\" -r 30 -filter:v scale=720:-1 -c:v ffv1 -pix_fmt yuv420p -colorspace bt709 \"{outputPathNativeVideo}\"";
 
             // Start the conversion
             var conversion = FFmpeg.Conversions.New().AddParameter(customArgs);
@@ -386,7 +399,7 @@ public class ImageProcessTestOpenCvSharp
             Console.WriteLine($"Conversion native completed successfully! - {result.Duration:hh\\:mm\\:ss}");
 
             customArgs =
-                $"-hwaccel auto -i \"{outputPathNativeVideo}\" -vf \"minterpolate=fps=60\" -c:v libvpx-vp9 -crf 20 \"{outputPathOptimizedVideo}\"";
+                $"-hwaccel auto -i \"{outputPathNativeVideo}\" -vf \"minterpolate='mi_mode=mci:mc_mode=aobmc:vsbmc=1:fps=60'\" -c:v libvpx-vp9 -crf 20 \"{outputPathOptimizedVideo}\"";
             
             // Start the conversion
             conversion = FFmpeg.Conversions.New().AddParameter(customArgs);
@@ -400,6 +413,56 @@ public class ImageProcessTestOpenCvSharp
             Console.WriteLine($"Error: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// In case 2 videos have different framerate, this should sync the frames count to result the same duration
+    /// </summary>
+    private static IList<ShootLayoutDetail> ExtractFrameIndices(IList<ShootLayoutDetail> shootTimes,
+        IDictionary<string, VideoCapture> videos)
+    {
+        if(shootTimes.Count == 0) return [];
+
+        var result = new ShootLayoutDetail[shootTimes.Count];
+        var minimumDuration = TimeSpan.MaxValue;
+
+        foreach (var video in videos)
+        {
+            var detail = shootTimes.Where(x => x.VideoName == video.Key).OrderBy(x => x.MarkedTime).ToArray();
+            var shootingDurations = new List<TimeSpan>(detail.Length + 2);
+
+            for (var i = 1; i < detail.Length; i++)
+            {
+                shootingDurations.Add(detail[i].MarkedTime - detail[i - 1].MarkedTime);
+            }
+            
+            shootingDurations.Add(StandardRecordDuration);
+            shootingDurations.Add(minimumDuration);
+
+            minimumDuration = shootingDurations.Min();
+        }
+
+        for(var i = 0; i < shootTimes.Count; i++)
+        {
+            if (string.IsNullOrEmpty(shootTimes[i].VideoName))
+            {
+                result[i] = shootTimes[i].Clone();
+                continue;
+            }
+            
+            var step = 1000.0 / videos[shootTimes[i].VideoName].Fps;
+            var maxDurationByFrames = minimumDuration.TotalMilliseconds / 1000 * videos[shootTimes[i].VideoName].Fps;
+            
+            var frameEnd = shootTimes[i].MarkedTime.TotalMilliseconds/step;
+            var frameStart = Math.Max(1, frameEnd - maxDurationByFrames);
+
+            var shootTimeCopy = shootTimes[i].Clone();
+            shootTimeCopy.FrameStart = Convert.ToInt32(frameStart);
+            shootTimeCopy.FrameEnd = Convert.ToInt32(frameEnd);
+            result[i] = shootTimeCopy;
+        }
+
+        return result;
+    }
     
     private static int[][] ExtractFrameIndices(ICollection<TimeSpan> shootTime, int recordFps)
     {
@@ -407,7 +470,7 @@ public class ImageProcessTestOpenCvSharp
         
         var result = new int[shootTime.Count][];
         var step = 1000.0 / recordFps;
-        var maxDurationByFrames = 10 * recordFps; 
+        var maxDurationByFrames = 10 * recordFps;
         var currentIdx = 0;
         
         foreach (var targetTime in shootTime)
