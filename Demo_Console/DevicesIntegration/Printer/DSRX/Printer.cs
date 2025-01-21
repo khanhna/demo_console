@@ -15,8 +15,10 @@ public static class Printer
 {
     public const int PageSizeHeight = 616;
     public const int PageSizeWidth = 413;
-    public static string ImageFilePath = string.Empty;
+    private static readonly int DefaultPrintingMargin = 6;
     
+    public static string ImageFilePath { get; private set; } = string.Empty;
+
     private static int _currentPrintedPage = 1;
     private static int _totalPageToPrint = 0;
     private static bool _isHalfCut;
@@ -47,8 +49,6 @@ public static class Printer
         AdjChromaG = 0,
         AdjChromaB = 0
     };
-    
-    private static int DefaultPrintingMargin = 6;
     
     public static (bool, string) PrintImage(ImagePrintInfo info)
     {
