@@ -26,6 +26,8 @@ public static class DateTimeAlgo
 
         var distance = 0;
         var isFuture = false;
+        var monthIdx = month - 1;
+        var todayMonthIdx = TodayMonth - 1;
         
         if(year == TodayYear)
         {
@@ -34,20 +36,20 @@ public static class DateTimeAlgo
             var monthToUse = IsLeapYear(year) ? DaysOfMonthLeapYear : DaysOfMonth;
             if (month > TodayMonth)
             {
-                for (var i = TodayMonth - 1; i < month; i++)
+                for (var i = todayMonthIdx; i < month; i++)
                 {
-                    if(i == TodayMonth - 1) distance += monthToUse[i] - TodayDay;
-                    else if (i == month - 1) distance += day;
+                    if(i == todayMonthIdx) distance += monthToUse[i] - TodayDay;
+                    else if (i == monthIdx) distance += day;
                     else distance += monthToUse[i];
                 }
                 isFuture = true;
             }
             else
             {
-                for (var i = month - 1; i < TodayMonth; i++)
+                for (var i = monthIdx; i < TodayMonth; i++)
                 {
-                    if(i == month - 1) distance += monthToUse[i] - day;
-                    else if (i == TodayMonth - 1) distance += TodayDay;
+                    if(i == monthIdx) distance += monthToUse[i] - day;
+                    else if (i == todayMonthIdx) distance += TodayDay;
                     else distance += monthToUse[i];
                 }
                 isFuture = false;
@@ -64,16 +66,16 @@ public static class DateTimeAlgo
             }
 
             var monthToUse = IsLeapYear(TodayYear) ? DaysOfMonthLeapYear : DaysOfMonth;
-            for (var i = TodayMonth - 1; i < 12; i++)
+            for (var i = todayMonthIdx; i < 12; i++)
             {
-                if(i == TodayMonth - 1) distance += monthToUse[i] - TodayDay;
+                if(i == todayMonthIdx) distance += monthToUse[i] - TodayDay;
                 else distance += monthToUse[i];
             }
 
             monthToUse = IsLeapYear(year) ? DaysOfMonthLeapYear : DaysOfMonth;
             for (var i = 0; i < month; i++)
             {
-                if(i == month - 1) distance += day;
+                if(i == monthIdx) distance += day;
                 else distance += monthToUse[i];
             }
             isFuture = true;
@@ -86,16 +88,16 @@ public static class DateTimeAlgo
             }
             
             var monthToUse = IsLeapYear(TodayYear) ? DaysOfMonthLeapYear : DaysOfMonth;
-            for (var i = TodayMonth - 1; i >= 0 ; i--)
+            for (var i = todayMonthIdx; i >= 0 ; i--)
             {
-                if(i == TodayMonth - 1) distance += TodayDay;
+                if(i == todayMonthIdx) distance += TodayDay;
                 else distance += monthToUse[i];
             }
 
             monthToUse = IsLeapYear(year) ? DaysOfMonthLeapYear : DaysOfMonth;
-            for (var i = month - 1; i < 12; i++)
+            for (var i = monthIdx; i < 12; i++)
             {
-                if(i == month - 1) distance += monthToUse[i] - day;
+                if(i == monthIdx) distance += monthToUse[i] - day;
                 else distance += monthToUse[i];
             }
             isFuture = false;
