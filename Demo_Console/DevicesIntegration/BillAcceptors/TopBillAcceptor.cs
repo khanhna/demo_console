@@ -1,11 +1,11 @@
 using System.IO.Ports;
 
-namespace Demo_Console.DevicesIntegration;
+namespace Demo_Console.DevicesIntegration.BillAcceptors;
 
 /// <summary>
 /// Design for TOP <i>TP70P3B-VN60Jil</i>
 /// </summary>
-public static class BillAcceptor
+public static class TopBillAcceptor
 {
     public const string ConsoleDescription = "Bill acceptor operation: 1. Open Connection, 2. Reset, 3. Close Connection, 4. Exit";
     private static bool _isTerminated;

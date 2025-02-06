@@ -58,7 +58,7 @@ public static class Printer
             if (string.IsNullOrEmpty(info.FilePath)) return (false, "No file specified!");
             if (!(info.FilePath.EndsWith(".png") || info.FilePath.EndsWith(".jpg") || info.FilePath.EndsWith(".jpeg")))
                 return (false, "Only accept *.png, *.jpg, *.jpeg file format!");
-            if (File.Exists(info.FilePath)) return (false, $"File specify at {info.FilePath} is not found!");
+            if (!File.Exists(info.FilePath)) return (false, $"File specify at {info.FilePath} is not found!");
             if (info.NumberOfPage < 1) return (false, $"Invalid printing number - {info.NumberOfPage}");
 
             ImageFilePath = info.FilePath;
