@@ -7,6 +7,9 @@ namespace Demo_Console.DevicesIntegration;
 /// </summary>
 public static class BillAcceptor
 {
+    public const string ConsoleDescription = "Bill acceptor operation: 1. Open Connection, 2. Reset, 3. Close Connection, 4. Exit";
+    private static bool _isTerminated;
+    
     public const string StandardPort = "COM3";
     public const int StandardBaudRate = 9600;
     public const int StandardDataBit = 8;
@@ -102,6 +105,48 @@ public static class BillAcceptor
         }
     }
 
+    /// <summary>
+    /// Experiment console operation
+    /// </summary>
+    public static async ValueTask ConsoleExecution()
+    {
+        while (!_isTerminated)
+        {
+            Console.WriteLine(ConsoleDescription);
+            var option = Console.ReadLine();
+            if (string.IsNullOrEmpty(option) || !int.TryParse(option, out var choice) || choice < 1 || choice > 4)
+            {
+                Console.WriteLine("Invalid choice, please try again!");
+                continue;
+            }
+
+            switch (choice)
+            {
+                case 1:
+                    var (_, openConnResult) = await OpenConnection();
+                    Console.WriteLine($"--> {openConnResult}");
+                    // Console.WriteLine("--> Option 1 received");
+                    break;
+                case 2:
+                    var (_, resetConnResult) = Reset();
+                    Console.WriteLine($"--> {resetConnResult}");
+                    // Console.WriteLine("--> Option 2 received");
+                    break;
+                case 3:
+                    var (_, closeConnResult) = await CloseConnection();
+                    Console.WriteLine($"--> {closeConnResult}");
+                    // Console.WriteLine("--> Option 3 received");
+                    break;
+                case 4:
+                    _isTerminated = true;
+                    var (_, result) = await CloseConnection();
+                    Console.WriteLine($"--> {result}");
+                    // Console.WriteLine("--> Option 4 received");
+                    break;
+            }
+        }
+    }
+
     private static void ResetState()
     {
         if (_serialPort != null)
@@ -146,12 +191,13 @@ public static class BillAcceptor
         //    money = "500000";
         //}
 
-        if (money != 0)
-        {
-            DepositAmount += money;
+        if (money == 0) return;
+        
+        DepositAmount += money;
+        // Experiment
+        Console.WriteLine($"--> Data received: {data}, Deposit amount: {money}, Total amount: {DepositAmount}");
 
-            byte[] dataToSend = [0x02];
-            serialPort.Write(dataToSend, 0, dataToSend.Length);
-        }
+        byte[] dataToSend = [0x02];
+        serialPort.Write(dataToSend, 0, dataToSend.Length);
     }
 }
