@@ -92,7 +92,7 @@ public static class Printer
             var prnSet = DefaultPrnSetting.Clone();
             // Check if the image is 2x6 paper size 
             prnSet.Cut2inch = _isHalfCut ? (short)Cut2inch.CT2 : (short)Cut2inch.CI1;
-            DevMode.PrintSetting(ref prnSet, ref pd);
+            DevMode.PrintSettingRefactored(ref prnSet, ref pd);
 
             // Call the Print method
             _currentPrintedPage = 1;

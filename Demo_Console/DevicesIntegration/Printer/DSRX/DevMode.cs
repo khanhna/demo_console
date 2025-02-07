@@ -122,16 +122,16 @@ public class DevMode
     public static extern int ResetDC(int hdc, IntPtr lpInitData);
 
     [DllImport("winspool.drv", EntryPoint = "DocumentPropertiesW", SetLastError = true, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    public static extern int DocumentProperties(int hwnd, int hPrinter, [MarshalAs(UnmanagedType.LPWStr)] string pDeviceName, IntPtr pDevModeOutput, IntPtr pDevModeInput, int fMode);
+    public static extern int DocumentProperties(int hwnd, IntPtr hPrinter, [MarshalAs(UnmanagedType.LPWStr)] string pDeviceName, IntPtr pDevModeOutput, IntPtr pDevModeInput, int fMode);
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    static extern int GlobalAlloc(int uFlags, int dwBytes);
+    static extern IntPtr GlobalAlloc(int uFlags, int dwBytes);
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    public static extern int GlobalFree(int hMem);
+    public static extern int GlobalFree(IntPtr hMem);
 
     [DllImport("kernel32.dll")]
-    public static extern int GlobalLock(int hMem);
+    public static extern IntPtr GlobalLock(IntPtr hMem);
 
     // Structure of print setting
     public struct PRINT_SETTING
@@ -248,19 +248,22 @@ public class DevMode
     public static void ExDevModeTopSearch()
     {
         PrinterModule.OpenPrinter(PrinterName, out var hPrinter, IntPtr.Zero);
-        var devModeSize = DocumentProperties(0, hPrinter.ToInt32(), PrinterName, IntPtr.Zero, IntPtr.Zero, 0);
+        var devModeSize = DocumentProperties(0, hPrinter, PrinterName, IntPtr.Zero, IntPtr.Zero, 0);
         if (devModeSize == 0)
         {
             PrinterModule.ClosePrinter(hPrinter);
             return;
         }
 
+        // Allocate memory for DEVMODE
         var hDevMode = GlobalAlloc(GHND, devModeSize);
-        var lpDevModeDmW = new IntPtr(GlobalLock(hDevMode));
-        var resultCode = DocumentProperties(0, hPrinter.ToInt32(), PrinterName, lpDevModeDmW, IntPtr.Zero, DM_OUT_BUFFER);
+        var lpDevModeDmW = GlobalLock(hDevMode);
+        
+        // Get device properties
+        var resultCode = DocumentProperties(0, hPrinter, PrinterName, lpDevModeDmW, IntPtr.Zero, DM_OUT_BUFFER);
         if (resultCode < 0)
         {
-            GlobalFree(lpDevModeDmW.ToInt32());
+            GlobalFree(lpDevModeDmW);
             PrinterModule.ClosePrinter(hPrinter);
             return;
         }
@@ -284,111 +287,112 @@ public class DevMode
             n++;
         } while (true);
 
-        GlobalFree(lpDevModeDmW.ToInt32());
+        // Free allocated memory
+        GlobalFree(lpDevModeDmW);
         PrinterModule.ClosePrinter(hPrinter);
     }
     
-    [SupportedOSPlatform("windows")]
-    public static void PrintSetting(ref PRINT_SETTING prnSet, ref PrintDocument pd)
-    {
-        try
-        {
-            IntPtr hPrinter;
-            int ResultCode;
-            int DevModeSize;
-            DEVMODEW dmw = new DEVMODEW();
-
-            int hDevMode;
-            int lpDevModeDmW;
-
-            ResultCode = PrinterModule.OpenPrinter(PrinterName, out hPrinter, IntPtr.Zero);
-            DevModeSize = DocumentProperties(0, hPrinter.ToInt32(), PrinterName, IntPtr.Zero, IntPtr.Zero, 0);
-            if (DevModeSize == 0)
-            {
-                PrinterModule.ClosePrinter(hPrinter);
-                return;
-            }
-
-            hDevMode = GlobalAlloc(GHND, DevModeSize);
-            lpDevModeDmW = GlobalLock(hDevMode);
-
-            ResultCode = DocumentProperties(0, hPrinter.ToInt32(), PrinterName, new IntPtr(lpDevModeDmW), IntPtr.Zero, DM_OUT_BUFFER);
-            if (ResultCode < 0)
-            {
-                GlobalFree(lpDevModeDmW);
-                PrinterModule.ClosePrinter(hPrinter);
-                return;
-            }
-            IntPtr ptr = new IntPtr(lpDevModeDmW);
-            var dm = IntPtr.Zero;
-            Mem2DevCopy(ref dmw, ptr, DevModeSize);
-
-            // Setting of DevMode
-            // Paper size
-            dmw.dmPaperSize = prnSet.PaperSize;
-
-            // Orientation
-            dmw.dmOrientation = prnSet.Orientation;
-
-            // Border
-            dmw.ExDevMode[ExDevTop + ExBorder] = prnSet.Border;
-
-            // Sharpness
-            dmw.ExDevMode[ExDevTop + ExSharpness] = prnSet.Sharpness;
-
-            // Resolution
-            dmw.dmPrintQuality = prnSet.PrintQuality;
-            dmw.dmYResolution = prnSet.YResolution;
-
-            // ICM
-            dmw.dmICMMethod = prnSet.ICMMethod;
-
-            // Color Adjustment
-            dmw.ExDevMode[ExDevTop + ExColorAdjustment] = prnSet.ColorAdjustment;
-
-            // Gamma
-            dmw.ExDevMode[ExDevTop + ExAdjGammaR] = prnSet.AdjGammaR;
-            dmw.ExDevMode[ExDevTop + ExAdjGammaG] = prnSet.AdjGammaG;
-            dmw.ExDevMode[ExDevTop + ExAdjGammaB] = prnSet.AdjGammaG;
-
-            // Brightness
-            dmw.ExDevMode[ExDevTop + ExAdjBrightnessR] = prnSet.AdjBrightnessR;
-            dmw.ExDevMode[ExDevTop + ExAdjBrightnessG] = prnSet.AdjBrightnessG;
-            dmw.ExDevMode[ExDevTop + ExAdjBrightnessB] = prnSet.AdjBrightnessB;
-
-            // Contrast
-            dmw.ExDevMode[ExDevTop + ExAdjContrastR] = prnSet.AdjContrastR;
-            dmw.ExDevMode[ExDevTop + ExAdjContrastG] = prnSet.AdjContrastR;
-            dmw.ExDevMode[ExDevTop + ExAdjContrastB] = prnSet.AdjContrastR;
-
-            // Chroma
-            dmw.ExDevMode[ExDevTop + ExAdjChromaR] = prnSet.AdjChromaR;
-            dmw.ExDevMode[ExDevTop + ExAdjChromaG] = prnSet.AdjChromaG;
-            dmw.ExDevMode[ExDevTop + ExAdjChromaB] = prnSet.AdjChromaB;
-
-            // Overcoar Finish
-            // Overcoar Finish
-            dmw.ExDevMode[ExDevTop + ExOvercoarFinish] = prnSet.OvercoatFinish;
-
-            // Print Re-try
-            dmw.ExDevMode[ExDevTop + ExPrintRetry] = prnSet.PrintRetry;
-
-            // 2inch Cut
-            if (PrinterPaper.PrinterModel == PrinterPaper.PRN_6IN)
-            {
-                dmw.ExDevMode[ExDevTop + ExCut2inch] = prnSet.Cut2inch;
-            }
-
-            dmw.dmFields |= DM_PAPERSIZE | DM_PRINTQUALITY | DM_YRESOLUTION | DM_ORIENTATION | DM_ICMMETHOD;
-            dmw.dmFields &= ~(DM_PAPERLENGTH | DM_PAPERWIDTH);
-            var inpt = new IntPtr(lpDevModeDmW);
-            Dev2MemCopy(inpt, ref dmw, DevModeSize);
-            PrinterModule.ClosePrinter(hPrinter);
-            pd.PrinterSettings.SetHdevmode(inpt);
-            ResultCode = GlobalFree(lpDevModeDmW);
-        }
-        catch { }
-    }
+    // [SupportedOSPlatform("windows")]
+    // public static void PrintSetting(ref PRINT_SETTING prnSet, ref PrintDocument pd)
+    // {
+    //     try
+    //     {
+    //         IntPtr hPrinter;
+    //         int ResultCode;
+    //         int DevModeSize;
+    //         DEVMODEW dmw = new DEVMODEW();
+    //
+    //         int hDevMode;
+    //         int lpDevModeDmW;
+    //
+    //         ResultCode = PrinterModule.OpenPrinter(PrinterName, out hPrinter, IntPtr.Zero);
+    //         DevModeSize = DocumentProperties(0, hPrinter.ToInt32(), PrinterName, IntPtr.Zero, IntPtr.Zero, 0);
+    //         if (DevModeSize == 0)
+    //         {
+    //             PrinterModule.ClosePrinter(hPrinter);
+    //             return;
+    //         }
+    //
+    //         hDevMode = GlobalAlloc(GHND, DevModeSize);
+    //         lpDevModeDmW = GlobalLock(hDevMode);
+    //
+    //         ResultCode = DocumentProperties(0, hPrinter.ToInt32(), PrinterName, new IntPtr(lpDevModeDmW), IntPtr.Zero, DM_OUT_BUFFER);
+    //         if (ResultCode < 0)
+    //         {
+    //             GlobalFree(lpDevModeDmW);
+    //             PrinterModule.ClosePrinter(hPrinter);
+    //             return;
+    //         }
+    //         IntPtr ptr = new IntPtr(lpDevModeDmW);
+    //         var dm = IntPtr.Zero;
+    //         Mem2DevCopy(ref dmw, ptr, DevModeSize);
+    //
+    //         // Setting of DevMode
+    //         // Paper size
+    //         dmw.dmPaperSize = prnSet.PaperSize;
+    //
+    //         // Orientation
+    //         dmw.dmOrientation = prnSet.Orientation;
+    //
+    //         // Border
+    //         dmw.ExDevMode[ExDevTop + ExBorder] = prnSet.Border;
+    //
+    //         // Sharpness
+    //         dmw.ExDevMode[ExDevTop + ExSharpness] = prnSet.Sharpness;
+    //
+    //         // Resolution
+    //         dmw.dmPrintQuality = prnSet.PrintQuality;
+    //         dmw.dmYResolution = prnSet.YResolution;
+    //
+    //         // ICM
+    //         dmw.dmICMMethod = prnSet.ICMMethod;
+    //
+    //         // Color Adjustment
+    //         dmw.ExDevMode[ExDevTop + ExColorAdjustment] = prnSet.ColorAdjustment;
+    //
+    //         // Gamma
+    //         dmw.ExDevMode[ExDevTop + ExAdjGammaR] = prnSet.AdjGammaR;
+    //         dmw.ExDevMode[ExDevTop + ExAdjGammaG] = prnSet.AdjGammaG;
+    //         dmw.ExDevMode[ExDevTop + ExAdjGammaB] = prnSet.AdjGammaG;
+    //
+    //         // Brightness
+    //         dmw.ExDevMode[ExDevTop + ExAdjBrightnessR] = prnSet.AdjBrightnessR;
+    //         dmw.ExDevMode[ExDevTop + ExAdjBrightnessG] = prnSet.AdjBrightnessG;
+    //         dmw.ExDevMode[ExDevTop + ExAdjBrightnessB] = prnSet.AdjBrightnessB;
+    //
+    //         // Contrast
+    //         dmw.ExDevMode[ExDevTop + ExAdjContrastR] = prnSet.AdjContrastR;
+    //         dmw.ExDevMode[ExDevTop + ExAdjContrastG] = prnSet.AdjContrastR;
+    //         dmw.ExDevMode[ExDevTop + ExAdjContrastB] = prnSet.AdjContrastR;
+    //
+    //         // Chroma
+    //         dmw.ExDevMode[ExDevTop + ExAdjChromaR] = prnSet.AdjChromaR;
+    //         dmw.ExDevMode[ExDevTop + ExAdjChromaG] = prnSet.AdjChromaG;
+    //         dmw.ExDevMode[ExDevTop + ExAdjChromaB] = prnSet.AdjChromaB;
+    //
+    //         // Overcoar Finish
+    //         // Overcoar Finish
+    //         dmw.ExDevMode[ExDevTop + ExOvercoarFinish] = prnSet.OvercoatFinish;
+    //
+    //         // Print Re-try
+    //         dmw.ExDevMode[ExDevTop + ExPrintRetry] = prnSet.PrintRetry;
+    //
+    //         // 2inch Cut
+    //         if (PrinterPaper.PrinterModel == PrinterPaper.PRN_6IN)
+    //         {
+    //             dmw.ExDevMode[ExDevTop + ExCut2inch] = prnSet.Cut2inch;
+    //         }
+    //
+    //         dmw.dmFields |= DM_PAPERSIZE | DM_PRINTQUALITY | DM_YRESOLUTION | DM_ORIENTATION | DM_ICMMETHOD;
+    //         dmw.dmFields &= ~(DM_PAPERLENGTH | DM_PAPERWIDTH);
+    //         var inpt = new IntPtr(lpDevModeDmW);
+    //         Dev2MemCopy(inpt, ref dmw, DevModeSize);
+    //         PrinterModule.ClosePrinter(hPrinter);
+    //         pd.PrinterSettings.SetHdevmode(inpt);
+    //         ResultCode = GlobalFree(lpDevModeDmW);
+    //     }
+    //     catch { }
+    // }
 
     [SupportedOSPlatform("windows")]
     public static void PrintSettingRefactored(ref PRINT_SETTING prnSet, ref PrintDocument pd)
