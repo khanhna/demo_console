@@ -18,11 +18,12 @@ public class ImagePrintInfo
 [SupportedOSPlatform("windows")]
 public static class Printer
 {
-    public const string PrinterName = "DS-RX1";
-    public const int PageSizeHeight = 616;
-    public const int PageSizeWidth = 413;
-    public const float PrnSizeWidth = 604;
-    public const float PrnSizeHeight = 399.8f;
+    private const string PrinterName = "DS-RX1";
+    // The PrintPageEventArgs page bound is 615x413, different page size won't be process correctly
+    private const int PageSizeWidth = 615;
+    private const int PageSizeHeight = 413;
+    private const float PrnSizeWidth = 604;
+    private const float PrnSizeHeight = 399.8f;
     private static readonly int DefaultPrintingMargin = 6;
     // Scale image to create border without reveal white edge, can adjust by testing
     private static readonly float PrintingScaleFactor = 0.97f;
@@ -40,7 +41,7 @@ public static class Printer
         YResolution = (short)YResolution.YR1,
         Sharpness = (short)Sharpness.SP1,
         PaperSize = (short)PaperSize.PZ1,
-        Orientation = (short)Orientation.OT1,
+        Orientation = (short)Orientation.OT1, // Print Horizontally
         ICMMethod = 0,
         ColorAdjustment = 0,
         // Gamma

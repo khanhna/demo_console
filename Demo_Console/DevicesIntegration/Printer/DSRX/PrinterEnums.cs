@@ -68,7 +68,8 @@ public enum ICMMethod
 
 public enum Orientation
 {
-    OT1 = 2
+    OT1 = 1, // Keep page orientation
+    OT2 = 2 // Rotate page orientation
 }
 
 public enum Cut2inch
