@@ -85,8 +85,7 @@ public static class Printer
             pd.DefaultPageSettings.PaperSize =
                 new System.Drawing.Printing.PaperSize("DefaultPaperSize", PageSizeWidth, PageSizeHeight);
             pd.PrinterSettings.Copies = (short)info.NumberOfPage;
-
-            using var img = Image.FromFile(ImageFilePath);
+            
             var prnSet = DefaultPrnSetting.Clone();
             // Check if the image is 2x6 paper size 
             prnSet.Cut2inch = _isHalfCut ? (short)Cut2inch.CT2 : (short)Cut2inch.CI1;
