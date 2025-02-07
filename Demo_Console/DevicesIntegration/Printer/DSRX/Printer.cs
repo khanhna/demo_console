@@ -21,6 +21,8 @@ public static class Printer
     public const string PrinterName = "DS-RX1";
     public const int PageSizeHeight = 616;
     public const int PageSizeWidth = 413;
+    public const float PrnSizeWidth = 604;
+    public const float PrnSizeHeight = 399.8f;
     private static readonly int DefaultPrintingMargin = 6;
     // Scale image to create border without reveal white edge, can adjust by testing
     private static readonly float PrintingScaleFactor = 0.97f;
@@ -70,6 +72,7 @@ public static class Printer
             if (!File.Exists(info.FilePath)) return (false, $"File specify at {info.FilePath} is not found!");
             if (info.NumberOfPage < 1) return (false, $"Invalid printing number - {info.NumberOfPage}");
 
+            // Must have
             DevMode.PrinterName = PrinterName;
             DevMode.ExDevModeTopSearch();
 
@@ -111,6 +114,7 @@ public static class Printer
     /// </summary>
     public static bool IsNeedHalfCut(int width, int height) => Math.Abs((double)width / height - 0.3333) < 0.01;
     
+    // Expected Size is 604 x 399.8
     private static void PrintPage(object sender, PrintPageEventArgs e)
     {
         // Load the image from the file path
@@ -118,18 +122,17 @@ public static class Printer
         if(_isRotateRequired) img.RotateFlip(RotateFlipType.Rotate90FlipNone);
 
         // Check if the image is 2x6 paper size
-        // TODO: Remember to test with 2x6 Horizontally images!!
         if (_isHalfCut)
         {
-            var ratio = (float)e.PageBounds.Width / (2 * img.Width) * PrintingScaleFactor;
-            var printWidth = img.Width * ratio;
-            var printHeight = img.Height * ratio + 4;
-            
-            var anchorTop = (e.PageBounds.Height - printHeight) / 2;
-            var anchorLeft = 4;
+            var ratio = (float)e.PageBounds.Width / img.Width;
+            var printWidth = Math.Min(PrnSizeWidth, img.Width * ratio);
+            var printHeight = Math.Min(PrnSizeHeight / 2, img.Height * ratio);
+
+            var anchorTop = 5;
+            var anchorLeft = anchorTop;
             
             e.Graphics?.DrawImage(img, anchorLeft, anchorTop, printWidth, printHeight);
-            e.Graphics?.DrawImage(img, anchorLeft + printWidth, anchorTop, printWidth, printHeight);
+            e.Graphics?.DrawImage(img, anchorLeft, anchorTop + printHeight, printWidth, printHeight);
         }
         else
         {
