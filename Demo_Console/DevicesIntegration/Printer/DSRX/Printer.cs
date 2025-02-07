@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Drawing.Printing;
+using System.Runtime.Versioning;
 
 namespace Demo_Console.DevicesIntegration.Printer.DSRX;
 
@@ -7,21 +8,29 @@ public class ImagePrintInfo
 {
     public string FilePath { get; set; } = string.Empty;
     public bool IsHalfCut { get; set; }
+    public bool IsRotateRequired { get; set; }
     public int NumberOfPage { get; set; }
 }
 
-// Implementation for DNP DS-RX1 HS printer!
+/// <summary>
+/// Implementation for DNP DS-RX1 HS printer!
+/// </summary>
+[SupportedOSPlatform("windows")]
 public static class Printer
 {
+    public const string PrinterName = "DS-RX1";
     public const int PageSizeHeight = 616;
     public const int PageSizeWidth = 413;
     private static readonly int DefaultPrintingMargin = 6;
+    // Scale image to create border without reveal white edge, can adjust by testing
+    private static readonly float PrintingScaleFactor = 0.97f;
     
     public static string ImageFilePath { get; private set; } = string.Empty;
 
     private static int _currentPrintedPage = 1;
     private static int _totalPageToPrint = 0;
     private static bool _isHalfCut;
+    private static bool _isRotateRequired;
 
     public static readonly DevMode.PRINT_SETTING DefaultPrnSetting = new()
     {
@@ -61,13 +70,17 @@ public static class Printer
             if (!File.Exists(info.FilePath)) return (false, $"File specify at {info.FilePath} is not found!");
             if (info.NumberOfPage < 1) return (false, $"Invalid printing number - {info.NumberOfPage}");
 
+            DevMode.PrinterName = PrinterName;
+            DevMode.ExDevModeTopSearch();
+
             ImageFilePath = info.FilePath;
             _totalPageToPrint = info.NumberOfPage;
             _isHalfCut = info.IsHalfCut;
+            _isRotateRequired = info.IsRotateRequired;
 
             var pd = new PrintDocument
             {
-                DocumentName = Guid.NewGuid().ToString().ToLower(),
+                DocumentName = Guid.NewGuid().ToString().ToLower()
             };
             pd.DefaultPageSettings.PaperSize =
                 new System.Drawing.Printing.PaperSize("DefaultPaperSize", PageSizeWidth, PageSizeHeight);
@@ -103,25 +116,59 @@ public static class Printer
     {
         // Load the image from the file path
         using var img = Image.FromFile(ImageFilePath);
+        if(_isRotateRequired) img.RotateFlip(RotateFlipType.Rotate90FlipNone);
 
         // Check if the image is 2x6 paper size
         // TODO: Remember to test with 2x6 Horizontally images!!
         if (_isHalfCut)
         {
-            var widthDraw = e.PageBounds.Width / 2;
-            var heightDraw = e.PageBounds.Height - (DefaultPrintingMargin * 2);
-            e.Graphics?.DrawImage(img,
-                new Rectangle(DefaultPrintingMargin, DefaultPrintingMargin, widthDraw - DefaultPrintingMargin,
-                    heightDraw));
-            e.Graphics?.DrawImage(img,
-                new Rectangle(widthDraw - 1, DefaultPrintingMargin, widthDraw - DefaultPrintingMargin, heightDraw));
+            var ratio = (float)e.PageBounds.Width / (2 * img.Width) * PrintingScaleFactor;
+            var printWidth = img.Width * ratio;
+            var printHeight = img.Height * ratio + 4;
+            
+            var anchorTop = (e.PageBounds.Height - printHeight) / 2;
+            var anchorLeft = 4;
+            
+            e.Graphics?.DrawImage(img, anchorLeft, anchorTop, printWidth, printHeight);
+            e.Graphics?.DrawImage(img, anchorLeft + printWidth, anchorTop, printWidth, printHeight);
         }
         else
         {
-            e.Graphics?.DrawImage(img,
-                new Rectangle(DefaultPrintingMargin, DefaultPrintingMargin,
-                    e.PageBounds.Width - (DefaultPrintingMargin * 2),
-                    e.PageBounds.Height - (DefaultPrintingMargin * 2)));
+            if (img.Width < img.Height)
+            {
+                // Calculate to resize image fit with printing paper size
+                var scale = Math.Min((float)PageSizeWidth / img.Width, (float)PageSizeHeight / img.Height) * PrintingScaleFactor;
+                var scaledWidth = Convert.ToInt32(img.Width * scale);
+                var scaledHeight = Convert.ToInt32(img.Height * scale + 10);
+                
+                var anchorLeft = (PageSizeWidth - scaledWidth) / 2;
+                var anchorTop = (PageSizeHeight - scaledHeight) / 2;
+
+                // If there's white edge, justify top anchor
+                if (scaledHeight < PageSizeHeight) anchorTop = Convert.ToInt32(anchorTop * 0.96);
+                e.Graphics?.DrawImage(img, anchorLeft, anchorTop, scaledWidth, scaledHeight);
+            }
+            else
+            {
+                var ratio = (float)((decimal)e.PageBounds.Height / img.Height) * PrintingScaleFactor;
+                var scaledWidth = img.Width * ratio;
+                var scaledHeight = img.Height * ratio + 10;
+                
+                if (scaledWidth < e.PageBounds.Width)
+                {
+                    ratio = (float)(e.PageBounds.Width / (double)img.Width);
+                    scaledWidth = img.Width * ratio - 14;
+                    scaledHeight = img.Height * ratio - 12;
+                }
+                
+                // Centering
+                var overWidth = e.PageBounds.Width - scaledWidth;
+                var overHeight = e.PageBounds.Height - scaledHeight;
+                var anchorTop = overWidth / 2;
+                var anchorLeft = overHeight / 2;
+
+                e.Graphics?.DrawImage(img, anchorTop, anchorLeft, scaledWidth, scaledHeight);
+            }
         }
 
         if (_currentPrintedPage >= _totalPageToPrint) return;
@@ -130,5 +177,12 @@ public static class Printer
         e.HasMorePages = true;
     }
 
-    private static void ResetState() => ImageFilePath = string.Empty;
+    private static void ResetState()
+    {
+        ImageFilePath = string.Empty;
+        _currentPrintedPage = 1;
+        _totalPageToPrint = 0;
+        _isHalfCut = false;
+        _isRotateRequired = false;
+    }
 }

@@ -1,5 +1,6 @@
 using System.Drawing.Printing;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace Demo_Console.DevicesIntegration.Printer.DSRX;
 
@@ -286,8 +287,111 @@ public class DevMode
         GlobalFree(lpDevModeDmW.ToInt32());
         PrinterModule.ClosePrinter(hPrinter);
     }
-
+    
+    [SupportedOSPlatform("windows")]
     public static void PrintSetting(ref PRINT_SETTING prnSet, ref PrintDocument pd)
+    {
+        try
+        {
+            IntPtr hPrinter;
+            int ResultCode;
+            int DevModeSize;
+            DEVMODEW dmw = new DEVMODEW();
+
+            int hDevMode;
+            int lpDevModeDmW;
+
+            ResultCode = PrinterModule.OpenPrinter(PrinterName, out hPrinter, IntPtr.Zero);
+            DevModeSize = DocumentProperties(0, hPrinter.ToInt32(), PrinterName, IntPtr.Zero, IntPtr.Zero, 0);
+            if (DevModeSize == 0)
+            {
+                PrinterModule.ClosePrinter(hPrinter);
+                return;
+            }
+
+            hDevMode = GlobalAlloc(GHND, DevModeSize);
+            lpDevModeDmW = GlobalLock(hDevMode);
+
+            ResultCode = DocumentProperties(0, hPrinter.ToInt32(), PrinterName, new IntPtr(lpDevModeDmW), IntPtr.Zero, DM_OUT_BUFFER);
+            if (ResultCode < 0)
+            {
+                GlobalFree(lpDevModeDmW);
+                PrinterModule.ClosePrinter(hPrinter);
+                return;
+            }
+            IntPtr ptr = new IntPtr(lpDevModeDmW);
+            var dm = IntPtr.Zero;
+            Mem2DevCopy(ref dmw, ptr, DevModeSize);
+
+            // Setting of DevMode
+            // Paper size
+            dmw.dmPaperSize = prnSet.PaperSize;
+
+            // Orientation
+            dmw.dmOrientation = prnSet.Orientation;
+
+            // Border
+            dmw.ExDevMode[ExDevTop + ExBorder] = prnSet.Border;
+
+            // Sharpness
+            dmw.ExDevMode[ExDevTop + ExSharpness] = prnSet.Sharpness;
+
+            // Resolution
+            dmw.dmPrintQuality = prnSet.PrintQuality;
+            dmw.dmYResolution = prnSet.YResolution;
+
+            // ICM
+            dmw.dmICMMethod = prnSet.ICMMethod;
+
+            // Color Adjustment
+            dmw.ExDevMode[ExDevTop + ExColorAdjustment] = prnSet.ColorAdjustment;
+
+            // Gamma
+            dmw.ExDevMode[ExDevTop + ExAdjGammaR] = prnSet.AdjGammaR;
+            dmw.ExDevMode[ExDevTop + ExAdjGammaG] = prnSet.AdjGammaG;
+            dmw.ExDevMode[ExDevTop + ExAdjGammaB] = prnSet.AdjGammaG;
+
+            // Brightness
+            dmw.ExDevMode[ExDevTop + ExAdjBrightnessR] = prnSet.AdjBrightnessR;
+            dmw.ExDevMode[ExDevTop + ExAdjBrightnessG] = prnSet.AdjBrightnessG;
+            dmw.ExDevMode[ExDevTop + ExAdjBrightnessB] = prnSet.AdjBrightnessB;
+
+            // Contrast
+            dmw.ExDevMode[ExDevTop + ExAdjContrastR] = prnSet.AdjContrastR;
+            dmw.ExDevMode[ExDevTop + ExAdjContrastG] = prnSet.AdjContrastR;
+            dmw.ExDevMode[ExDevTop + ExAdjContrastB] = prnSet.AdjContrastR;
+
+            // Chroma
+            dmw.ExDevMode[ExDevTop + ExAdjChromaR] = prnSet.AdjChromaR;
+            dmw.ExDevMode[ExDevTop + ExAdjChromaG] = prnSet.AdjChromaG;
+            dmw.ExDevMode[ExDevTop + ExAdjChromaB] = prnSet.AdjChromaB;
+
+            // Overcoar Finish
+            // Overcoar Finish
+            dmw.ExDevMode[ExDevTop + ExOvercoarFinish] = prnSet.OvercoatFinish;
+
+            // Print Re-try
+            dmw.ExDevMode[ExDevTop + ExPrintRetry] = prnSet.PrintRetry;
+
+            // 2inch Cut
+            if (PrinterPaper.PrinterModel == PrinterPaper.PRN_6IN)
+            {
+                dmw.ExDevMode[ExDevTop + ExCut2inch] = prnSet.Cut2inch;
+            }
+
+            dmw.dmFields |= DM_PAPERSIZE | DM_PRINTQUALITY | DM_YRESOLUTION | DM_ORIENTATION | DM_ICMMETHOD;
+            dmw.dmFields &= ~(DM_PAPERLENGTH | DM_PAPERWIDTH);
+            var inpt = new IntPtr(lpDevModeDmW);
+            Dev2MemCopy(inpt, ref dmw, DevModeSize);
+            PrinterModule.ClosePrinter(hPrinter);
+            pd.PrinterSettings.SetHdevmode(inpt);
+            ResultCode = GlobalFree(lpDevModeDmW);
+        }
+        catch { }
+    }
+
+    [SupportedOSPlatform("windows")]
+    public static void PrintSettingRefactored(ref PRINT_SETTING prnSet, ref PrintDocument pd)
     {
         try
         {
