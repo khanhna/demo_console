@@ -24,10 +24,8 @@ public static class Printer
     private const int PageSizeHeight = 413;
     private const float PrnSizeWidth = 604;
     private const float PrnSizeHeight = 399.8f;
-    private static readonly int DefaultPrintingMargin = 6;
-    // Scale image to create border without reveal white edge, can adjust by testing
-    private static readonly float PrintingScaleFactor = 0.97f;
-    
+    private const int DefaultPrintingMargin = 5;
+    private const float PrintingFluctuationAllowance = 2;
     public static string ImageFilePath { get; private set; } = string.Empty;
 
     private static int _currentPrintedPage = 1;
@@ -73,14 +71,15 @@ public static class Printer
             if (!File.Exists(info.FilePath)) return (false, $"File specify at {info.FilePath} is not found!");
             if (info.NumberOfPage < 1) return (false, $"Invalid printing number - {info.NumberOfPage}");
 
-            // Must have
+            // Must have | Retest!!
             DevMode.PrinterName = PrinterName;
             DevMode.ExDevModeTopSearch();
 
+            using var img = Image.FromFile(ImageFilePath);
             ImageFilePath = info.FilePath;
             _totalPageToPrint = info.NumberOfPage;
-            _isHalfCut = info.IsHalfCut;
-            _isRotateRequired = info.IsRotateRequired;
+            _isHalfCut = IsNeedHalfCut(img.Width, img.Height);
+            _isRotateRequired = IsNeedRotate(img.Width, img.Height);
 
             var pd = new PrintDocument
             {
@@ -113,71 +112,67 @@ public static class Printer
     /// <summary>
     /// Determine should the image be cut in half or not, usually for detecting 2x6 paper size
     /// </summary>
-    public static bool IsNeedHalfCut(int width, int height) => Math.Abs((double)width / height - 0.3333) < 0.01;
+    private static bool IsNeedHalfCut(int width, int height) => Math.Abs((decimal)width / height) < 0.35m;
     
-    // Expected Size is 604 x 399.8
+    /// <summary>
+    /// Determine should the image be rotated or not
+    /// </summary>
+    private static bool IsNeedRotate(int width, int height) => width < height;
+    
     private static void PrintPage(object sender, PrintPageEventArgs e)
     {
         // Load the image from the file path
         using var img = Image.FromFile(ImageFilePath);
         if(_isRotateRequired) img.RotateFlip(RotateFlipType.Rotate90FlipNone);
+        var ratio = (float)e.PageBounds.Width / img.Width;
 
         // Check if the image is 2x6 paper size
         if (_isHalfCut)
         {
-            var ratio = (float)e.PageBounds.Width / img.Width;
             var printWidth = Math.Min(PrnSizeWidth, img.Width * ratio);
             var printHeight = Math.Min(PrnSizeHeight / 2, img.Height * ratio);
 
-            var anchorTop = 5;
-            var anchorLeft = anchorTop;
-            
-            e.Graphics?.DrawImage(img, anchorLeft, anchorTop, printWidth, printHeight);
-            e.Graphics?.DrawImage(img, anchorLeft, anchorTop + printHeight, printWidth, printHeight);
+            e.Graphics?.DrawImage(img, DefaultPrintingMargin, DefaultPrintingMargin,
+                IsFluctuationWithinPercentConstraint(printWidth, PrintingFluctuationAllowance)
+                    ? printWidth
+                    : PrnSizeWidth,
+                IsFluctuationWithinPercentConstraint(printHeight, PrintingFluctuationAllowance)
+                    ? printHeight
+                    : PrnSizeHeight);
+            e.Graphics?.DrawImage(img, DefaultPrintingMargin, DefaultPrintingMargin + printHeight,
+                IsFluctuationWithinPercentConstraint(printWidth, PrintingFluctuationAllowance)
+                    ? printWidth
+                    : PrnSizeWidth,
+                IsFluctuationWithinPercentConstraint(printHeight, PrintingFluctuationAllowance)
+                    ? printHeight
+                    : PrnSizeHeight);
         }
         else
         {
-            if (img.Width < img.Height)
-            {
-                // Calculate to resize image fit with printing paper size
-                var scale = Math.Min((float)PageSizeWidth / img.Width, (float)PageSizeHeight / img.Height) * PrintingScaleFactor;
-                var scaledWidth = Convert.ToInt32(img.Width * scale);
-                var scaledHeight = Convert.ToInt32(img.Height * scale + 10);
-                
-                var anchorLeft = (PageSizeWidth - scaledWidth) / 2;
-                var anchorTop = (PageSizeHeight - scaledHeight) / 2;
+            var printWidth = Math.Min(PrnSizeWidth, img.Width * ratio);
+            var printHeight = Math.Min(PrnSizeHeight, img.Height * ratio);
 
-                // If there's white edge, justify top anchor
-                if (scaledHeight < PageSizeHeight) anchorTop = Convert.ToInt32(anchorTop * 0.96);
-                e.Graphics?.DrawImage(img, anchorLeft, anchorTop, scaledWidth, scaledHeight);
-            }
-            else
-            {
-                var ratio = (float)((decimal)e.PageBounds.Height / img.Height) * PrintingScaleFactor;
-                var scaledWidth = img.Width * ratio;
-                var scaledHeight = img.Height * ratio + 10;
-                
-                if (scaledWidth < e.PageBounds.Width)
-                {
-                    ratio = (float)(e.PageBounds.Width / (double)img.Width);
-                    scaledWidth = img.Width * ratio - 14;
-                    scaledHeight = img.Height * ratio - 12;
-                }
-                
-                // Centering
-                var overWidth = e.PageBounds.Width - scaledWidth;
-                var overHeight = e.PageBounds.Height - scaledHeight;
-                var anchorTop = overWidth / 2;
-                var anchorLeft = overHeight / 2;
-
-                e.Graphics?.DrawImage(img, anchorTop, anchorLeft, scaledWidth, scaledHeight);
-            }
+            e.Graphics?.DrawImage(img, DefaultPrintingMargin, DefaultPrintingMargin,
+                IsFluctuationWithinPercentConstraint(printWidth, PrintingFluctuationAllowance)
+                    ? printWidth
+                    : PrnSizeWidth,
+                IsFluctuationWithinPercentConstraint(printHeight, PrintingFluctuationAllowance)
+                    ? printHeight
+                    : PrnSizeHeight);
         }
 
         if (_currentPrintedPage >= _totalPageToPrint) return;
         
         _currentPrintedPage++;
         e.HasMorePages = true;
+    }
+
+    private static bool IsFluctuationWithinPercentConstraint(float value, float percentage)
+    {
+        if(percentage <= 0) throw new ArgumentException("Percentage must be greater than 0", nameof(percentage));
+
+        var fluctuation = value / 100 * percentage;
+        return value >= value - fluctuation && value <= value + fluctuation;
     }
 
     private static void ResetState()
