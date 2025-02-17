@@ -71,15 +71,15 @@ public static class Printer
             if (!File.Exists(info.FilePath)) return (false, $"File specify at {info.FilePath} is not found!");
             if (info.NumberOfPage < 1) return (false, $"Invalid printing number - {info.NumberOfPage}");
 
-            // Must have | Retest!!
+            // Must have, otherwise, 2inch cut won't work
             DevMode.PrinterName = PrinterName;
             DevMode.ExDevModeTopSearch();
 
-            using var img = Image.FromFile(ImageFilePath);
+            using var img = Image.FromFile(info.FilePath);
             ImageFilePath = info.FilePath;
             _totalPageToPrint = info.NumberOfPage;
-            _isHalfCut = IsNeedHalfCut(img.Width, img.Height);
-            _isRotateRequired = IsNeedRotate(img.Width, img.Height);
+            _isHalfCut = info.IsHalfCut;
+            _isRotateRequired = info.IsRotateRequired;
 
             var pd = new PrintDocument
             {
