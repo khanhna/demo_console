@@ -2,6 +2,7 @@ using Demo_Console.Playground;
 using FluentAssertions;
 using NSubstitute;
 using Testing.Shared;
+using Testing.Shared.Extensions;
 using Xunit.Abstractions;
 
 namespace DemoConsole.UnitTests;
@@ -60,8 +61,10 @@ public class PlaygroundTests : TestingContext<Playground>, IClassFixture<Playgro
     {
         // Act
         // Iut. should do something
-        
-        GetMockFor<IPerson>().Say().Should().Be("Hi", "We already mock it in constructor"); 
+
+        GetMockFor<IPerson>().Say().Should().Be("Hi", "We already mock it in constructor");
+        Fixture.For<Person>().With(x => x.Name, "Khanh").Create()
+            .Name.Should().Be("Khanh", "We just use AutoFixture to create the object");
     }
     
     [Theory]
@@ -111,10 +114,13 @@ public class Person : IPerson
 {
     public static int Counter;
     
-    public Person()
+    public Person(string name)
     {
         Counter++;
+        
+        Name = name;
     }
-    
+
+    public string Name { get; }
     public string Say() => "Hello";
 }
