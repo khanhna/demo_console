@@ -6,10 +6,13 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>
       <PackageReference Include="FFMpegCore" Version="5.1.0" />
+      <PackageReference Include="Mediapipe.Net" Version="0.9.2" />
+      <PackageReference Include="Mediapipe.Net.Runtime.CPU" Version="0.9.1" />
       <PackageReference Include="NEST" Version="7.17.5" />
       <PackageReference Include="NEST.JsonNetSerializer" Version="7.17.5" />
       <PackageReference Include="OpenCvSharp4.Extensions" Version="4.10.0.20241108" />
@@ -19,6 +22,18 @@
       <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
       <PackageReference Include="System.IO.Ports" Version="9.0.1" />
       <PackageReference Include="Xabe.FFmpeg" Version="5.2.6" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="Images\haarcascade_frontalface_alt.xml">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="Images\haarcascade_eye.xml">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
+      <None Update="Images\haarcascade_smile.xml">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>

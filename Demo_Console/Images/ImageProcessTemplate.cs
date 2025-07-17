@@ -5,7 +5,7 @@ using Size = System.Drawing.Size;
 
 namespace Demo_Console.Images;
 
-public class ImageProcess
+public class ImageProcessTemplate
 {
     public static void MergeImage()
     {
@@ -574,8 +574,8 @@ public class ImageProcessTestOpenCvSharp
             
             // Process final frame by Graphics & Bitmap, quite slow!!
             using var imageLayout = new Bitmap(baseImage.Width, baseImage.Height);
-            using var themeImage = ImageProcess.MatToImage(imageTheme);
-            using var finalImageBitmap = ImageProcess.MatToImage(finalImage);
+            using var themeImage = ImageProcessTemplate.MatToImage(imageTheme);
+            using var finalImageBitmap = ImageProcessTemplate.MatToImage(finalImage);
 
             using (var g = Graphics.FromImage(imageLayout))
             {
@@ -857,7 +857,7 @@ public class ImageProcessTestNatively
                 break;
             }
 
-            using var targetImage = ImageProcess.MatToImage(frame);
+            using var targetImage = ImageProcessTemplate.MatToImage(frame);
             using var targetImageAsBitmap = new Bitmap(targetImage);
             using var processedImage = CropResizeFlipImageFromCenter(targetImageAsBitmap, 3, 2, 916);
             
