@@ -74,6 +74,33 @@ public class ImageCompositor
 
         return result;
     }
+    
+    /// <summary>
+    /// Rotate image by specified angle
+    /// </summary>
+    public void RotateImage(Image<Rgba32> image, float angleDegrees)
+    {
+        if (Math.Abs(angleDegrees) < 0.01f) return; // Skip if no rotation needed
+
+        // Handle common rotation angles for better performance and quality
+        if (Math.Abs(angleDegrees - 90) < 0.01f)
+        {
+            image.Mutate(x => x.Rotate(RotateMode.Rotate90));
+        }
+        else if (Math.Abs(angleDegrees - 180) < 0.01f || Math.Abs(angleDegrees + 180) < 0.01f)
+        {
+            image.Mutate(x => x.Rotate(RotateMode.Rotate180));
+        }
+        else if (Math.Abs(angleDegrees - 270) < 0.01f || Math.Abs(angleDegrees + 90) < 0.01f)
+        {
+            image.Mutate(x => x.Rotate(RotateMode.Rotate270));
+        }
+        else
+        {
+            // For arbitrary angles, use smooth rotation with high-quality resampling
+            image.Mutate(x => x.Rotate(angleDegrees, KnownResamplers.Lanczos3));
+        }
+    }
 
     /// <summary>
     /// Resize overlay to completely cover the background image.
@@ -483,6 +510,11 @@ public class ImageCompositor
             if (majorImage == null) return null;
 
             using var overlay = await Image.LoadAsync<Rgba32>(overlayPath);
+            var originalImageRatio = majorImage.Width / majorImage.Height;
+
+            if (Math.Abs(originalImageRatio - overlay.Width / overlay.Height) >
+                Math.Abs(originalImageRatio - overlay.Height / overlay.Width))
+                RotateImage(overlay, 90);
 
             // Remove background from overlay
             using var overlayProcessed = RemoveBackground(overlay, threshold, feather, invertThreshold);
